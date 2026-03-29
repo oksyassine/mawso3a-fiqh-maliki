@@ -311,32 +311,36 @@ async function viewMasala(masalaKey) {
     }
     html += '</tbody></table></div>';
 
-    // Review section
-    const review = getReview(masalaKey);
-    const statusLabels = {
-        ai: { label: 'مولّد بالذكاء الاصطناعي', cls: 'status-ai' },
-        approved: { label: 'تمت المراجعة', cls: 'status-reviewed' },
-        rejected: { label: 'مرفوض', cls: 'status-ai' },
-        verified: { label: 'موثق', cls: 'status-verified' },
-    };
-    const st = statusLabels[review.status] || statusLabels.ai;
-
+    // Scholar feedback form (saved to DB)
     html += `
     <div class="review-section">
-        <h3>مراجعة العالم</h3>
-        <div class="review-status">
-            <span>الحالة:</span>
-            <span class="status-badge ${st.cls}" id="reviewStatusBadge">${st.label}</span>
-        </div>
-        <textarea class="review-notes" id="reviewNotes" placeholder="ملاحظات المراجع...">${review.notes || ''}</textarea>
-        <div class="review-buttons">
-            <button class="btn btn-approve" onclick="doReview('${masalaKey}', 'approved')">قبول</button>
-            <button class="btn btn-reject" onclick="doReview('${masalaKey}', 'rejected')">رفض</button>
-            <button class="btn btn-reset" onclick="doReview('${masalaKey}', 'ai')">إعادة تعيين</button>
+        <h3>تعليقات العلماء</h3>
+        <div id="feedbackList" class="feedback-list"><div class="loading">جاري تحميل التعليقات...</div></div>
+        <div class="feedback-form">
+            <h4>إضافة تعليق جديد</h4>
+            <input type="text" id="fbScholar" class="review-input" placeholder="اسم العالم / المراجع">
+            <select id="fbStatus" class="review-select">
+                <option value="pending">في الانتظار</option>
+                <option value="approved">موافق على النتيجة</option>
+                <option value="rejected">غير موافق</option>
+                <option value="needs_revision">يحتاج مراجعة</option>
+            </select>
+            <select id="fbSuggestedResult" class="review-select">
+                <option value="">— تصحيح النتيجة (اختياري) —</option>
+                <option value="ittifaq">اتفاق</option>
+                <option value="ikhtilaf">اختلاف</option>
+                <option value="tafsilat">تفصيل</option>
+            </select>
+            <textarea id="fbComment" class="review-notes" placeholder="التعليق أو التصحيح..."></textarea>
+            <textarea id="fbCorrections" class="review-notes" placeholder="تصحيحات تفصيلية (اختياري)..."></textarea>
+            <button class="btn btn-approve" onclick="submitFeedback('${masalaKey}')">إرسال التعليق</button>
         </div>
     </div>`;
 
     app.innerHTML = html;
+
+    // Load existing feedback for this masala
+    loadMasalaFeedback(masalaKey);
 }
 
 window.showCards = function () {
@@ -353,18 +357,135 @@ window.showTable = function () {
     document.getElementById('btnCards').classList.remove('active');
 };
 
-window.doReview = function (masalaKey, status) {
-    const notes = document.getElementById('reviewNotes').value;
-    saveReview(masalaKey, { status, notes });
-    const statusLabels = {
-        ai: { label: 'مولّد بالذكاء الاصطناعي', cls: 'status-ai' },
-        approved: { label: 'تمت المراجعة', cls: 'status-reviewed' },
-        rejected: { label: 'مرفوض', cls: 'status-ai' },
+// === Feedback functions ===
+
+const FB_STATUS_LABELS = {
+    pending: { label: 'في الانتظار', cls: 'status-ai' },
+    approved: { label: 'موافق', cls: 'status-reviewed' },
+    rejected: { label: 'غير موافق', cls: 'badge-ikhtilaf' },
+    needs_revision: { label: 'يحتاج مراجعة', cls: 'badge-tafsilat' },
+};
+
+async function loadMasalaFeedback(masalaKey) {
+    const el = document.getElementById('feedbackList');
+    try {
+        const feedbacks = await api(`/api/feedback/masala/${masalaKey}`);
+        if (!feedbacks.length) {
+            el.innerHTML = '<div style="color:var(--cream-dim);padding:0.5rem;">لا توجد تعليقات بعد</div>';
+            return;
+        }
+        el.innerHTML = feedbacks.map(fb => {
+            const st = FB_STATUS_LABELS[fb.status] || FB_STATUS_LABELS.pending;
+            const date = fb.created_at ? new Date(fb.created_at).toLocaleDateString('ar-MA') : '';
+            return `
+            <div class="feedback-card">
+                <div class="feedback-header">
+                    <strong>${fb.scholar_name || 'مجهول'}</strong>
+                    <span class="status-badge ${st.cls}">${st.label}</span>
+                    <span style="color:var(--cream-dim);font-size:0.8rem;">${date}</span>
+                </div>
+                ${fb.suggested_result ? `<div>النتيجة المقترحة: ${resultBadge(fb.suggested_result)}</div>` : ''}
+                <div class="feedback-comment">${fb.comment || ''}</div>
+                ${fb.corrections ? `<div class="feedback-corrections"><strong>تصحيحات:</strong> ${fb.corrections}</div>` : ''}
+            </div>`;
+        }).join('');
+    } catch (e) {
+        el.innerHTML = '<div style="color:#D4453A;">خطأ في تحميل التعليقات</div>';
+    }
+}
+
+window.submitFeedback = async function(masalaKey) {
+    const data = {
+        masala_key: masalaKey,
+        scholar_name: document.getElementById('fbScholar').value,
+        status: document.getElementById('fbStatus').value,
+        comment: document.getElementById('fbComment').value,
+        suggested_result: document.getElementById('fbSuggestedResult').value,
+        corrections: document.getElementById('fbCorrections').value,
     };
-    const st = statusLabels[status] || statusLabels.ai;
-    const badge = document.getElementById('reviewStatusBadge');
-    badge.textContent = st.label;
-    badge.className = 'status-badge ' + st.cls;
+    try {
+        const fbUrl = '/api/feedback/'.replace('/api/', '/fiqh/api/') || '/api/feedback/';
+        await fetch(fbUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+        });
+        // Clear form
+        document.getElementById('fbScholar').value = '';
+        document.getElementById('fbComment').value = '';
+        document.getElementById('fbCorrections').value = '';
+        document.getElementById('fbSuggestedResult').value = '';
+        document.getElementById('fbStatus').value = 'pending';
+        // Reload feedback
+        loadMasalaFeedback(masalaKey);
+    } catch (e) {
+        alert('خطأ في إرسال التعليق: ' + e.message);
+    }
+};
+
+async function viewFeedback() {
+    setActiveNav('nav-feedback');
+    setBreadcrumb([{ label: 'الرئيسية', href: '#/' }, { label: 'المراجعات' }]);
+
+    const stats = await api('/api/feedback/stats');
+    const feedbacks = await api('/api/feedback/all');
+
+    let html = '<h2 class="page-title">مراجعات العلماء</h2>';
+
+    // Stats cards
+    html += '<div class="stats-grid">';
+    html += `<div class="stat-card"><div class="stat-number">${stats.total || 0}</div><div class="stat-label">إجمالي التعليقات</div></div>`;
+    const bs = stats.by_status || {};
+    html += `<div class="stat-card"><div class="stat-number" style="color:var(--ittifaq)">${bs.approved || 0}</div><div class="stat-label">موافق</div></div>`;
+    html += `<div class="stat-card"><div class="stat-number" style="color:var(--ikhtilaf)">${bs.rejected || 0}</div><div class="stat-label">غير موافق</div></div>`;
+    html += `<div class="stat-card"><div class="stat-number" style="color:var(--tafsilat)">${bs.needs_revision || 0}</div><div class="stat-label">يحتاج مراجعة</div></div>`;
+    html += `<div class="stat-card"><div class="stat-number">${bs.pending || 0}</div><div class="stat-label">في الانتظار</div></div>`;
+    html += '</div>';
+
+    // Filter tabs
+    html += `
+    <div class="filter-tabs">
+        <button class="active" onclick="filterFeedback('all', this)">الكل</button>
+        <button onclick="filterFeedback('pending', this)">في الانتظار</button>
+        <button onclick="filterFeedback('approved', this)">موافق</button>
+        <button onclick="filterFeedback('rejected', this)">غير موافق</button>
+        <button onclick="filterFeedback('needs_revision', this)">يحتاج مراجعة</button>
+    </div>`;
+
+    // Feedback list
+    html += '<div class="masail-list" id="feedbackListAll">';
+    if (!feedbacks.length) {
+        html += '<div class="empty-state">لا توجد مراجعات بعد</div>';
+    }
+    for (const fb of feedbacks) {
+        const st = FB_STATUS_LABELS[fb.status] || FB_STATUS_LABELS.pending;
+        const date = fb.created_at ? new Date(fb.created_at).toLocaleDateString('ar-MA') : '';
+        html += `
+        <div class="masala-row feedback-row" data-status="${fb.status}" onclick="location.hash='#/masala/${fb.masala_key}'">
+            <div class="masala-info">
+                <div class="masala-title">${fb.masala_key}</div>
+                <div class="masala-summary">
+                    <strong>${fb.scholar_name || 'مجهول'}</strong> — ${fb.comment ? fb.comment.substring(0, 120) + '...' : 'بدون تعليق'}
+                </div>
+            </div>
+            <div class="masala-meta">
+                <span style="color:var(--cream-dim);font-size:0.8rem;">${date}</span>
+                <span class="status-badge ${st.cls}">${st.label}</span>
+                ${fb.suggested_result ? resultBadge(fb.suggested_result) : ''}
+            </div>
+        </div>`;
+    }
+    html += '</div>';
+
+    app.innerHTML = html;
+}
+
+window.filterFeedback = function(status, btn) {
+    document.querySelectorAll('.filter-tabs button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.feedback-row').forEach(row => {
+        row.style.display = (status === 'all' || row.getAttribute('data-status') === status) ? '' : 'none';
+    });
 };
 
 async function viewStats() {
@@ -465,6 +586,8 @@ async function route() {
     try {
         if (hash === '#/' || hash === '#') {
             await viewDashboard();
+        } else if (hash === '#/feedback') {
+            await viewFeedback();
         } else if (hash === '#/stats') {
             await viewStats();
         } else if (hash.match(/^#\/kitab\/([^/]+)\/bab\/(.+)$/)) {

@@ -280,6 +280,10 @@ def get_stats():
     }
 
 
+# Feedback router
+from fiqh_feedback import router as feedback_router
+app.include_router(feedback_router)
+
 # Serve static files
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
