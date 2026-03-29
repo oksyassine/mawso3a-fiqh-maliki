@@ -1,0 +1,760 @@
+/* ===== Maliki Fiqh Review — Dark Scholarly Theme ===== */
+
+@import url('https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+:root {
+    --bg-dark: #0D1F0D;
+    --bg-card: #1A2E1A;
+    --bg-card-hover: #223722;
+    --bg-input: #152515;
+    --gold: #C8A96E;
+    --gold-dim: #9E8555;
+    --cream: #F5F0E8;
+    --cream-dim: #B8B0A0;
+    --ittifaq: #2D7D46;
+    --ikhtilaf: #D4453A;
+    --tafsilat: #D4943A;
+    --ittifaq-bg: #1A3D24;
+    --ikhtilaf-bg: #3D1A1A;
+    --tafsilat-bg: #3D2E1A;
+    --border: #2A4A2A;
+    --shadow: rgba(0, 0, 0, 0.4);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+}
+
+body {
+    font-family: 'Amiri', serif;
+    background: var(--bg-dark);
+    color: var(--cream);
+    direction: rtl;
+    min-height: 100vh;
+    line-height: 1.8;
+}
+
+/* ===== Header / Nav ===== */
+
+.top-bar {
+    background: linear-gradient(180deg, #0A1A0A, var(--bg-dark));
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.top-bar h1 {
+    font-size: 1.5rem;
+    color: var(--gold);
+    font-weight: 700;
+}
+
+.top-bar h1 span {
+    color: var(--cream-dim);
+    font-size: 0.9rem;
+    font-weight: 400;
+    margin-right: 0.5rem;
+}
+
+.nav-links {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.nav-links a {
+    color: var(--cream-dim);
+    text-decoration: none;
+    font-size: 1rem;
+    padding: 0.3rem 0.8rem;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.nav-links a:hover,
+.nav-links a.active {
+    color: var(--gold);
+    background: var(--bg-card);
+}
+
+/* ===== Breadcrumb ===== */
+
+.breadcrumb {
+    padding: 0.8rem 2rem;
+    font-size: 0.95rem;
+    color: var(--cream-dim);
+    border-bottom: 1px solid var(--border);
+    background: rgba(26, 46, 26, 0.5);
+}
+
+.breadcrumb a {
+    color: var(--gold);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.breadcrumb a:hover {
+    color: var(--cream);
+}
+
+.breadcrumb .sep {
+    margin: 0 0.5rem;
+    color: var(--border);
+}
+
+/* ===== Main Content ===== */
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.page-title {
+    font-size: 1.8rem;
+    color: var(--gold);
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 0.8rem;
+}
+
+/* ===== Cards Grid ===== */
+
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1.5rem;
+}
+
+.card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+}
+
+.card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--gold);
+    border-radius: 0 12px 12px 0;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--gold-dim);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px var(--shadow);
+}
+
+.card:hover::before {
+    opacity: 1;
+}
+
+.card-title {
+    font-size: 1.3rem;
+    color: var(--gold);
+    margin-bottom: 0.8rem;
+}
+
+.card-stats {
+    display: flex;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+    margin-top: 0.8rem;
+}
+
+.stat-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.7rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    background: rgba(200, 169, 110, 0.15);
+    color: var(--gold);
+}
+
+.stat-pill.ittifaq { background: var(--ittifaq-bg); color: #6FCF8C; }
+.stat-pill.ikhtilaf { background: var(--ikhtilaf-bg); color: #F08080; }
+.stat-pill.tafsilat { background: var(--tafsilat-bg); color: #F0C060; }
+
+/* ===== Badges ===== */
+
+.badge {
+    display: inline-block;
+    padding: 0.15rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.badge-ittifaq { background: var(--ittifaq); color: #fff; }
+.badge-ikhtilaf { background: var(--ikhtilaf); color: #fff; }
+.badge-tafsilat { background: var(--tafsilat); color: #fff; }
+.badge-wajib { background: #2D7D46; color: #fff; }
+.badge-mandub { background: #3A8DD4; color: #fff; }
+.badge-mubah { background: #6B6B6B; color: #fff; }
+.badge-makruh { background: #D4943A; color: #fff; }
+.badge-haram { background: #D4453A; color: #fff; }
+.badge-none { background: #4A4A4A; color: #ccc; }
+
+/* ===== Masail List ===== */
+
+.masail-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.masala-row {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.masala-row:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--gold-dim);
+}
+
+.masala-row .masala-info {
+    flex: 1;
+}
+
+.masala-row .masala-title {
+    font-size: 1.15rem;
+    color: var(--cream);
+    margin-bottom: 0.3rem;
+}
+
+.masala-row .masala-summary {
+    font-size: 0.9rem;
+    color: var(--cream-dim);
+    line-height: 1.5;
+}
+
+.masala-row .masala-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    flex-shrink: 0;
+}
+
+/* ===== Search Bar ===== */
+
+.search-bar {
+    margin-bottom: 1.5rem;
+    position: relative;
+}
+
+.search-bar input {
+    width: 100%;
+    padding: 0.9rem 1.2rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--cream);
+    font-family: 'Amiri', serif;
+    font-size: 1.1rem;
+    outline: none;
+    transition: border-color 0.2s;
+    direction: rtl;
+}
+
+.search-bar input::placeholder {
+    color: var(--cream-dim);
+}
+
+.search-bar input:focus {
+    border-color: var(--gold);
+}
+
+/* ===== Detail View ===== */
+
+.detail-header {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.detail-header .masala-title-big {
+    font-size: 2rem;
+    color: var(--gold);
+    margin-bottom: 1rem;
+}
+
+.result-banner {
+    padding: 1.2rem 2rem;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.result-banner.ittifaq { background: var(--ittifaq-bg); border: 1px solid var(--ittifaq); }
+.result-banner.ikhtilaf { background: var(--ikhtilaf-bg); border: 1px solid var(--ikhtilaf); }
+.result-banner.tafsilat { background: var(--tafsilat-bg); border: 1px solid var(--tafsilat); }
+
+.result-banner .result-type {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.result-banner .result-summary {
+    font-size: 1.1rem;
+    line-height: 1.8;
+}
+
+.details-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 2rem;
+    line-height: 2;
+}
+
+.details-section h3 {
+    color: var(--gold);
+    margin-bottom: 0.8rem;
+    font-size: 1.2rem;
+}
+
+/* ===== Positions Table / Cards ===== */
+
+.positions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 1.2rem;
+    margin-bottom: 2rem;
+}
+
+.position-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.2s;
+}
+
+.position-card:hover {
+    border-color: var(--gold-dim);
+}
+
+.position-card .book-name {
+    font-size: 1.2rem;
+    color: var(--gold);
+    margin-bottom: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.position-card .field-label {
+    color: var(--gold-dim);
+    font-size: 0.9rem;
+    margin-top: 0.8rem;
+    margin-bottom: 0.2rem;
+}
+
+.position-card .field-value {
+    color: var(--cream);
+    line-height: 1.9;
+    font-size: 1.05rem;
+}
+
+/* Side-by-side toggle */
+.view-toggle {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    justify-content: center;
+}
+
+.view-toggle button {
+    padding: 0.5rem 1.2rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--cream-dim);
+    font-family: 'Amiri', serif;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.view-toggle button.active {
+    background: var(--gold);
+    color: var(--bg-dark);
+    border-color: var(--gold);
+}
+
+.view-toggle button:hover:not(.active) {
+    border-color: var(--gold-dim);
+    color: var(--cream);
+}
+
+/* Side-by-side table */
+.positions-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 2rem;
+    font-size: 0.95rem;
+}
+
+.positions-table th {
+    background: var(--bg-card);
+    color: var(--gold);
+    padding: 1rem;
+    border: 1px solid var(--border);
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.positions-table td {
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--border);
+    vertical-align: top;
+    line-height: 1.8;
+    background: var(--bg-card);
+}
+
+.positions-table tr:hover td {
+    background: var(--bg-card-hover);
+}
+
+/* ===== Review Section ===== */
+
+.review-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    margin-top: 2rem;
+}
+
+.review-section h3 {
+    color: var(--gold);
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+}
+
+.review-status {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.status-badge {
+    padding: 0.3rem 1rem;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.status-ai { background: #3A3A6B; color: #A0A0F0; }
+.status-reviewed { background: #3A6B3A; color: #A0F0A0; }
+.status-verified { background: #1A5A3A; color: #60F0A0; }
+
+.review-notes {
+    width: 100%;
+    min-height: 80px;
+    padding: 0.8rem 1rem;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--cream);
+    font-family: 'Amiri', serif;
+    font-size: 1rem;
+    direction: rtl;
+    resize: vertical;
+    margin-bottom: 1rem;
+    outline: none;
+}
+
+.review-notes:focus {
+    border-color: var(--gold);
+}
+
+.review-buttons {
+    display: flex;
+    gap: 0.8rem;
+}
+
+.btn {
+    padding: 0.5rem 1.5rem;
+    border-radius: 8px;
+    border: none;
+    font-family: 'Amiri', serif;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 700;
+}
+
+.btn-approve {
+    background: var(--ittifaq);
+    color: #fff;
+}
+
+.btn-approve:hover { background: #3A9D56; }
+
+.btn-reject {
+    background: var(--ikhtilaf);
+    color: #fff;
+}
+
+.btn-reject:hover { background: #E05550; }
+
+.btn-reset {
+    background: var(--bg-input);
+    color: var(--cream-dim);
+    border: 1px solid var(--border);
+}
+
+.btn-reset:hover { border-color: var(--gold-dim); }
+
+/* ===== Stats Page ===== */
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.stat-card .stat-number {
+    font-size: 2.5rem;
+    color: var(--gold);
+    font-weight: 700;
+}
+
+.stat-card .stat-label {
+    font-size: 1rem;
+    color: var(--cream-dim);
+}
+
+.chart-container {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.chart-container h3 {
+    color: var(--gold);
+    margin-bottom: 1rem;
+}
+
+.bar-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.bar-row {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.bar-label {
+    width: 160px;
+    text-align: left;
+    font-size: 0.95rem;
+    color: var(--cream-dim);
+    flex-shrink: 0;
+}
+
+.bar-track {
+    flex: 1;
+    height: 28px;
+    background: var(--bg-input);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.6s ease;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 0 0.5rem;
+    font-size: 0.8rem;
+    color: #fff;
+    font-weight: 700;
+    min-width: 2rem;
+}
+
+.bar-fill.ittifaq { background: var(--ittifaq); }
+.bar-fill.ikhtilaf { background: var(--ikhtilaf); }
+.bar-fill.tafsilat { background: var(--tafsilat); }
+.bar-fill.gold { background: var(--gold); color: var(--bg-dark); }
+
+/* ===== Loading ===== */
+
+.loading {
+    text-align: center;
+    padding: 3rem;
+    color: var(--cream-dim);
+    font-size: 1.2rem;
+}
+
+/* ===== Responsive ===== */
+
+@media (max-width: 768px) {
+    .top-bar {
+        flex-direction: column;
+        gap: 0.8rem;
+        padding: 1rem;
+    }
+
+    .container {
+        padding: 1rem;
+    }
+
+    .positions-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .cards-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .bar-label {
+        width: 100px;
+        font-size: 0.85rem;
+    }
+}
+
+/* ===== Section Title ===== */
+.section-title {
+    font-size: 1.3rem;
+    color: var(--gold);
+    margin: 1.5rem 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+/* ===== Filter Tabs ===== */
+.filter-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.filter-tabs button {
+    padding: 0.4rem 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    color: var(--cream-dim);
+    font-family: 'Amiri', serif;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filter-tabs button.active {
+    background: var(--gold);
+    color: var(--bg-dark);
+    border-color: var(--gold);
+}
+
+.filter-tabs button:hover:not(.active) {
+    border-color: var(--gold-dim);
+    color: var(--cream);
+}
+
+/* ===== Empty State ===== */
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--cream-dim);
+}
+
+.empty-state .icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+/* ===== Scroll to top ===== */
+.scroll-top {
+    position: fixed;
+    bottom: 2rem;
+    left: 2rem;
+    width: 48px;
+    height: 48px;
+    background: var(--gold);
+    color: var(--bg-dark);
+    border: none;
+    border-radius: 50%;
+    font-size: 1.5rem;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px var(--shadow);
+    transition: all 0.2s;
+    z-index: 50;
+}
+
+.scroll-top:hover {
+    transform: translateY(-2px);
+}
+
+/* ===== Count indicator on cards ===== */
+.count-circle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(200, 169, 110, 0.2);
+    color: var(--gold);
+    font-size: 0.9rem;
+    font-weight: 700;
+}
