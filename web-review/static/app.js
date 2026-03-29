@@ -17,9 +17,17 @@ const RESULT_LABELS = {
 const HUKM_LABELS = {
     wajib: 'واجب',
     mandub: 'مندوب',
+    mustahab: 'مستحب',
     mubah: 'مباح',
     makruh: 'مكروه',
     haram: 'حرام',
+    sahih: 'صحيح',
+    fasid: 'فاسد',
+    batil: 'باطل',
+    sunna: 'سنة',
+    sunna_muakkada: 'سنة مؤكدة',
+    fard: 'فرض',
+    fard_kifaya: 'فرض كفاية',
 };
 
 function hukmBadge(hukm) {
@@ -493,8 +501,10 @@ async function viewStats() {
     setBreadcrumb([{ label: 'الرئيسية', href: '#/' }, { label: 'الإحصائيات' }]);
 
     const stats = await api('/api/stats');
+    const fbStats = await api('/api/feedback/stats');
     const rc = stats.result_counts;
     const total = stats.total_masail || 1;
+    const reviewedKeys = new Set(fbStats.reviewed_masail_keys || []);
 
     let html = '<h2 class="page-title">الإحصائيات العامة</h2>';
 
@@ -572,6 +582,45 @@ async function viewStats() {
             </div>
         </div>`;
     }
+    html += '</div></div>';
+
+    // Scholar coverage per bab
+    const totalReviewed = reviewedKeys.size;
+    const coveragePct = total > 0 ? Math.round((totalReviewed / total) * 100) : 0;
+
+    html += `<div class="chart-container">
+        <h3>تغطية المراجعة العلمية</h3>
+        <div class="stats-grid" style="margin-bottom:1rem;">
+            <div class="stat-card"><div class="stat-number">${totalReviewed}</div><div class="stat-label">مسائل تمت مراجعتها</div></div>
+            <div class="stat-card"><div class="stat-number">${total - totalReviewed}</div><div class="stat-label">مسائل بدون مراجعة</div></div>
+            <div class="stat-card"><div class="stat-number" style="color:${coveragePct > 50 ? 'var(--ittifaq)' : 'var(--tafsilat)'}">${coveragePct}%</div><div class="stat-label">نسبة التغطية الإجمالية</div></div>
+        </div>
+        <div class="bar-chart">`;
+
+    // Get all masail to calculate per-bab coverage
+    const allKutub = await api('/api/kutub');
+    for (const k of allKutub) {
+        const abwab = await api(`/api/kutub/${k.kitab_key}/abwab`);
+        html += `<div style="color:var(--gold);font-weight:bold;margin:1rem 0 0.5rem;">${k.kitab}</div>`;
+        const allMasail = await api(`/api/kutub/${k.kitab_key}/masail`);
+
+        for (const b of abwab) {
+            const babMasail = allMasail.filter(m => m.category === b.bab);
+            const babReviewed = babMasail.filter(m => reviewedKeys.has(m.masala_key)).length;
+            const babTotal = babMasail.length;
+            const babPct = babTotal > 0 ? Math.round((babReviewed / babTotal) * 100) : 0;
+            const barCls = babPct === 100 ? 'ittifaq' : babPct > 0 ? 'tafsilat' : 'ikhtilaf';
+
+            html += `
+            <div class="bar-row">
+                <div class="bar-label">${b.bab} <span style="color:var(--cream-dim);font-size:0.8rem;">(${babReviewed}/${babTotal})</span></div>
+                <div class="bar-track">
+                    <div class="bar-fill ${barCls}" style="width:${Math.max(babPct, 2)}%">${babPct}%</div>
+                </div>
+            </div>`;
+        }
+    }
+
     html += '</div></div>';
 
     app.innerHTML = html;

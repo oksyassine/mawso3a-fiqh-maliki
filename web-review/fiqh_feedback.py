@@ -108,11 +108,16 @@ def feedback_stats():
     by_masala = conn.execute(
         'SELECT masala_key, COUNT(*) as cnt FROM feedback GROUP BY masala_key ORDER BY cnt DESC LIMIT 20'
     ).fetchall()
+    # Unique masail that have at least one feedback
+    reviewed_masail = conn.execute(
+        'SELECT DISTINCT masala_key FROM feedback'
+    ).fetchall()
     conn.close()
     return {
         'total': total,
         'by_status': {r['status']: r['cnt'] for r in by_status},
         'top_masail': [{'masala_key': r['masala_key'], 'count': r['cnt']} for r in by_masala],
+        'reviewed_masail_keys': [r['masala_key'] for r in reviewed_masail],
     }
 
 
