@@ -284,6 +284,49 @@ def get_stats():
 from fiqh_feedback import router as feedback_router
 app.include_router(feedback_router)
 
+
+# Maraji3 (sources) — extract referenced books from masail data
+@app.get("/api/maraji3")
+def get_maraji3():
+    """Get all referenced sources with usage stats."""
+    book_stats = defaultdict(lambda: {"positions": 0, "masail": set(), "kutub": set(), "sample_texts": []})
+    for m in ALL_MASAIL:
+        for p in m.get("positions", []):
+            book = p.get("book", "غير محدد")
+            book_stats[book]["positions"] += 1
+            book_stats[book]["masail"].add(m["masala_key"])
+            book_stats[book]["kutub"].add(m.get("_kitab", ""))
+            if len(book_stats[book]["sample_texts"]) < 2 and p.get("hukm_text_ar"):
+                book_stats[book]["sample_texts"].append(p["hukm_text_ar"][:150])
+
+    # Book metadata from seed_authors_books.py
+    BOOK_META = {
+        "الرسالة": {"author": "ابن أبي زيد القيرواني", "death": "386هـ", "level": "مبتدئ", "type": "متن", "desc": "أشهر متن في المذهب المالكي، يشمل العقيدة والعبادات والمعاملات"},
+        "مختصر خليل": {"author": "خليل بن إسحاق الجندي", "death": "776هـ", "level": "متقدم", "type": "متن", "desc": "أهم متن في المذهب بعد الموطأ، عليه أكثر الشروح"},
+        "مختصر الأخضري": {"author": "عبد الرحمن الأخضري", "death": "983هـ", "level": "مبتدئ", "type": "متن", "desc": "متن مختصر في الطهارة والصلاة، أول ما يحفظه طالب العلم"},
+        "المرشد المعين": {"author": "عبد الواحد بن عاشر", "death": "1040هـ", "level": "مبتدئ", "type": "نظم", "desc": "منظومة في العقيدة والفقه والتصوف، 317 بيتا"},
+        "أقرب المسالك": {"author": "أحمد الدردير", "death": "1201هـ", "level": "متوسط", "type": "متن", "desc": "متن مختصر أيسر من مختصر خليل"},
+        "المدونة الكبرى": {"author": "سحنون (عن ابن القاسم عن مالك)", "death": "240هـ", "level": "متخصص", "type": "موسوعة", "desc": "أهم مرجع في الفقه المالكي"},
+        "المدونة": {"author": "سحنون", "death": "240هـ", "level": "متخصص", "type": "موسوعة", "desc": "المدونة الكبرى (اختصار)"},
+    }
+
+    result = []
+    for book, stats in sorted(book_stats.items(), key=lambda x: -x[1]["positions"]):
+        meta = BOOK_META.get(book, {})
+        result.append({
+            "book": book,
+            "author": meta.get("author", ""),
+            "death": meta.get("death", ""),
+            "level": meta.get("level", ""),
+            "type": meta.get("type", ""),
+            "description": meta.get("desc", ""),
+            "positions_count": stats["positions"],
+            "masail_count": len(stats["masail"]),
+            "kutub_covered": list(stats["kutub"]),
+            "sample_texts": stats["sample_texts"],
+        })
+    return result
+
 # Serve static files
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

@@ -14,6 +14,13 @@ const RESULT_LABELS = {
     tafsilat: 'تفصيل',
 };
 
+const KITAB_NAMES_AR = {
+    tahara: 'كتاب الطهارة', salat: 'كتاب الصلاة', zakat: 'كتاب الزكاة',
+    siyam: 'كتاب الصيام', hajj: 'كتاب الحج', nikah: 'كتاب النكاح',
+    talaq: 'كتاب الطلاق', buyu: 'كتاب البيوع', faraid: 'كتاب الفرائض',
+    qada: 'كتاب القضاء', hudud: 'كتاب الحدود', misc: 'كتب متفرقة',
+};
+
 const HUKM_LABELS = {
     wajib: 'واجب',
     mandub: 'مندوب',
@@ -153,13 +160,16 @@ async function viewKitab(kitabKey) {
 
 async function viewBab(kitabKey, babName) {
     setActiveNav('nav-home');
+    const kitabName = localStorage.getItem('lastKitabName') || KITAB_NAMES_AR[kitabKey] || kitabKey;
     setBreadcrumb([
         { label: 'الرئيسية', href: '#/' },
-        { label: 'كتاب الطهارة', href: `#/kitab/${kitabKey}` },
+        { label: kitabName, href: `#/kitab/${kitabKey}` },
         { label: babName },
     ]);
 
-    const masail = await api(`/api/kutub/${kitabKey}/masail?bab=${encodeURIComponent(babName)}`);
+    // Fetch all masail and filter client-side (avoids Arabic query string issues)
+    const allMasail = await api(`/api/kutub/${kitabKey}/masail`);
+    const masail = allMasail.filter(m => m.category === babName);
 
     let html = `<h2 class="page-title">${babName}</h2>`;
 
@@ -496,6 +506,78 @@ window.filterFeedback = function(status, btn) {
     });
 };
 
+// === المراجع (Sources) ===
+
+async function viewMaraji3() {
+    setActiveNav('nav-maraji3');
+    setBreadcrumb([{ label: 'الرئيسية', href: '#/' }, { label: 'المراجع' }]);
+
+    const sources = await api('/api/maraji3');
+
+    let html = '<h2 class="page-title">المراجع والمصادر</h2>';
+    html += '<p style="color:var(--cream-dim);margin-bottom:1.5rem;">المتون والكتب المستخدمة في استخراج الأحكام ومقارنتها</p>';
+
+    // Summary
+    html += '<div class="stats-grid">';
+    html += `<div class="stat-card"><div class="stat-number">${sources.length}</div><div class="stat-label">عدد المصادر</div></div>`;
+    const totalPositions = sources.reduce((s, b) => s + b.positions_count, 0);
+    html += `<div class="stat-card"><div class="stat-number">${totalPositions}</div><div class="stat-label">إجمالي المواقف المستخرجة</div></div>`;
+    html += '</div>';
+
+    // Level labels
+    const LEVEL_LABELS = { 'مبتدئ': 'badge-ittifaq', 'متوسط': 'badge-tafsilat', 'متقدم': 'badge-ikhtilaf', 'متخصص': 'badge-none' };
+    const TYPE_LABELS = { 'متن': 'badge-wajib', 'نظم': 'badge-mandub', 'موسوعة': 'badge-none', 'شرح': 'badge-mubah' };
+
+    // Source cards
+    html += '<div class="maraji3-list">';
+    for (const src of sources) {
+        const levelCls = LEVEL_LABELS[src.level] || 'badge-none';
+        const typeCls = TYPE_LABELS[src.type] || 'badge-none';
+
+        html += `
+        <div class="card marji3-card">
+            <div class="marji3-header">
+                <div class="marji3-title">${src.book}</div>
+                <div class="marji3-badges">
+                    ${src.type ? `<span class="badge ${typeCls}">${src.type}</span>` : ''}
+                    ${src.level ? `<span class="badge ${levelCls}">${src.level}</span>` : ''}
+                </div>
+            </div>
+            ${src.author ? `<div class="marji3-author"><strong>المؤلف:</strong> ${src.author} ${src.death ? `(ت ${src.death})` : ''}</div>` : ''}
+            ${src.description ? `<div class="marji3-desc">${src.description}</div>` : ''}
+            <div class="marji3-stats">
+                <span><strong>${src.positions_count}</strong> موقف مستخرج</span>
+                <span><strong>${src.masail_count}</strong> مسألة</span>
+                <span>الكتب: ${src.kutub_covered.join(' · ')}</span>
+            </div>
+            ${src.sample_texts.length ? `
+            <div class="marji3-samples">
+                <div style="color:var(--gold-dim);font-size:0.85rem;margin-bottom:0.3rem;">نموذج من النصوص المستخرجة:</div>
+                ${src.sample_texts.map(t => `<div class="sample-text">"${t}..."</div>`).join('')}
+            </div>` : ''}
+        </div>`;
+    }
+    html += '</div>';
+
+    // Methodology note
+    html += `
+    <div class="card" style="margin-top:2rem;border-color:var(--gold-dim);">
+        <h3 style="color:var(--gold);margin-bottom:0.8rem;">منهجية الاستخراج</h3>
+        <div style="color:var(--cream);line-height:2;">
+            <p>تم استخراج المواقف الفقهية من المتون المذكورة أعلاه باستخدام الذكاء الاصطناعي (Claude) بناء على المعرفة المخزنة من هذه الكتب.</p>
+            <p><strong>مستويات الموثوقية:</strong></p>
+            <ul style="padding-right:1.5rem;">
+                <li><span class="badge status-ai" style="font-size:0.8rem;">مولّد بالذكاء الاصطناعي</span> — يحتاج مراجعة عالم</li>
+                <li><span class="badge status-reviewed" style="font-size:0.8rem;">تمت المراجعة</span> — راجعه عالم وأقره</li>
+                <li><span class="badge status-verified" style="font-size:0.8rem;">موثق</span> — تم التحقق من النص الأصلي</li>
+            </ul>
+            <p style="margin-top:0.8rem;">المتون المستخدمة تمثل طبقات مختلفة من التعليم الفقهي المالكي: من مستوى المبتدئين (الأخضري، ابن عاشر) إلى المتخصصين (المدونة، مختصر خليل).</p>
+        </div>
+    </div>`;
+
+    app.innerHTML = html;
+}
+
 async function viewStats() {
     setActiveNav('nav-stats');
     setBreadcrumb([{ label: 'الرئيسية', href: '#/' }, { label: 'الإحصائيات' }]);
@@ -635,6 +717,8 @@ async function route() {
     try {
         if (hash === '#/' || hash === '#') {
             await viewDashboard();
+        } else if (hash === '#/maraji3') {
+            await viewMaraji3();
         } else if (hash === '#/feedback') {
             await viewFeedback();
         } else if (hash === '#/stats') {
