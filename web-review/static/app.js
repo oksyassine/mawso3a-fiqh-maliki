@@ -304,7 +304,7 @@ function renderMasalaCard(m, bab) {
         for (const d of dalilArr) {
             const typeLabel = d.type === 'hadith' ? 'حديث' : d.type === 'athar' ? 'أثر' : d.type || '';
             const hasFullText = d.full_text ? true : false;
-            const clickAttr = hasFullText ? `class="mw-dalil-clickable" onclick="showDalilPopup(this)" data-full-text="${escAttr(d.full_text)}" data-shamela-url="${escAttr(d.shamela_url || '')}" data-type="${escAttr(typeLabel)}" data-num="${d.num || ''}"` : '';
+            const clickAttr = hasFullText ? `class="mw-dalil-clickable" onclick="showDalilPopup(this)" data-full-text="${escAttr(d.full_text)}" data-shamela-url="${escAttr(d.shamela_url || '')}" data-type="${escAttr(typeLabel)}" data-num="${d.num || ''}" data-hadith-grade="${escAttr(d.hadith_grade || '')}"` : '';
             const summary = d.summary || (d.full_text ? fixArabicDisplay(d.full_text.substring(0, 120)) + '...' : '');
             html += `<li ${clickAttr}>
                 <span class="mw-dalil-type">${escHtml(typeLabel)} ${d.num || ''}</span>
@@ -2207,16 +2207,21 @@ function showDalilPopup(el) {
     const shamelaUrl = el.dataset.shamelaUrl || '';
     const type = el.dataset.type || '';
     const num = el.dataset.num || '';
+    const grade = el.dataset.hadithGrade || '';
 
     document.getElementById('dalilModalTitle').textContent = `${type} ${num}`;
     document.getElementById('dalilModalBody').textContent = fixArabicDisplay(fullText);
 
     const footer = document.getElementById('dalilModalFooter');
-    if (shamelaUrl) {
-        footer.innerHTML = `<a href="${escAttr(shamelaUrl)}" target="_blank" rel="noopener" class="dalil-shamela-link">📖 عرض في المكتبة الشاملة</a>`;
-    } else {
-        footer.innerHTML = '';
+    let footerHtml = '';
+    if (grade) {
+        const gradeColor = grade === 'صحيح' ? '#4CAF50' : grade === 'حسن' ? '#FF9800' : grade === 'ضعيف' ? '#f44336' : 'var(--gold)';
+        footerHtml += `<div style="margin-bottom:.5rem;"><span style="background:${gradeColor};color:#fff;padding:.2rem .6rem;border-radius:.3rem;font-size:.85rem;">حكم الحديث: ${escHtml(grade)}</span></div>`;
     }
+    if (shamelaUrl) {
+        footerHtml += `<a href="${escAttr(shamelaUrl)}" target="_blank" rel="noopener" class="dalil-shamela-link">📖 عرض في المكتبة الشاملة</a>`;
+    }
+    footer.innerHTML = footerHtml;
 
     document.getElementById('dalilModal').classList.add('active');
 }
