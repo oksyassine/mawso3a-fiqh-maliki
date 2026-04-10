@@ -284,6 +284,10 @@ def get_stats():
 from fiqh_feedback import router as feedback_router
 app.include_router(feedback_router)
 
+# Maktaba (book library) router
+from fiqh_maktaba import router as maktaba_router
+app.include_router(maktaba_router)
+
 
 # Maraji3 (sources) — extract referenced books from masail data
 @app.get("/api/maraji3")

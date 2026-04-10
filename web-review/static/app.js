@@ -99,18 +99,40 @@ function saveReview(masalaKey, review) {
     } catch (e) { console.error(e); }
 }
 
-// ===== Muwatta Data =====
+// ===== Book Data Loaders =====
+
+const _bookCache = {};
+async function loadBookData(filename) {
+    if (!_bookCache[filename]) {
+        const res = await fetch(filename);
+        if (!res.ok) throw new Error(`فشل تحميل ${filename}`);
+        const d = await res.json();
+        if (!d || !Array.isArray(d.kutub)) throw new Error(`بيانات ${filename} غير صالحة`);
+        _bookCache[filename] = d;
+    }
+    return _bookCache[filename];
+}
 
 let _muwattaData = null;
 async function loadMuwatta() {
     if (!_muwattaData) {
-        const res = await fetch('muwatta-masail.json');
-        if (!res.ok) throw new Error('فشل تحميل بيانات الموطأ');
-        const d = await res.json();
-        if (!d || !Array.isArray(d.kutub)) throw new Error('بيانات الموطأ غير صالحة');
-        _muwattaData = d;
+        _muwattaData = await loadBookData('muwatta-masail.json');
     }
     return _muwattaData;
+}
+
+async function loadMudawwana() { return loadBookData('mudawwana-masail.json'); }
+async function loadRisala() { return loadBookData('risala-masail.json'); }
+async function loadKhalil() { return loadBookData('khalil-masail.json'); }
+
+let _comparisonData = null;
+async function loadComparison() {
+    if (!_comparisonData) {
+        const res = await fetch('tahara-comparison.json');
+        if (!res.ok) return { kutub: [], total_comparisons: 0, average_tawafoq: 0 };
+        _comparisonData = await res.json();
+    }
+    return _comparisonData;
 }
 
 // ===== Muwatta Views =====
@@ -233,13 +255,12 @@ async function viewMuwattaKitab(kitabNum) {
 
 function renderMasalaCard(m, bab) {
     const id = m.masala_id || m.id || '';
-    const title = m.masala_title || m.title || '';
-    const titleShort = m.masala_title_short || '';
+    const topic = m.masala_topic || m.masala_title || m.title || '';
     const hukm = m.hukm || '';
     const babName = m.bab || bab.bab_name || '';
     const babNum = m.bab_num || bab.bab_num || '';
     const tags = m.fiqh_tags || [];
-    const qawlMalik = m.qawl_malik || [];
+    const rulings = m.rulings || (m.qawl_malik ? m.qawl_malik.map(t => ({speaker:'مالك',text:t})) : []);
     const dalilArr = m.dalil || [];
     const subMasail = m.sub_masail || [];
 
@@ -249,24 +270,33 @@ function renderMasalaCard(m, bab) {
             <span class="mw-masala-num">باب ${escHtml(String(babNum))}</span>
             <span class="mw-masala-page">${escHtml(babName)}</span>
         </div>
-        <h4 class="mw-masala-title">${escHtml(title)}</h4>
-        ${titleShort ? `<div style="color:var(--cream-dim);margin-bottom:.5rem;font-size:.9rem;">${escHtml(titleShort)}</div>` : ''}
+        <h4 class="mw-masala-title">${escHtml(topic)}</h4>
 
-        <div class="mw-masala-hukm">
-            <strong>الحكم:</strong> ${escHtml(hukm)}
-        </div>`;
+        ${hukm ? `<div class="mw-masala-hukm"><strong>الحكم:</strong> ${fixArabicDisplay(escHtml(hukm))}</div>` : ''}`;
 
-    // قول مالك
-    if (qawlMalik.length > 0) {
-        html += `<div class="mw-qawl-malik">
-            <strong style="color:var(--gold);">قال مالك:</strong>`;
-        for (const q of qawlMalik) {
-            html += `<blockquote class="mw-quote">${escHtml(q)}</blockquote>`;
+    // أقوال العلماء (rulings grouped by speaker)
+    if (rulings.length > 0) {
+        // Group by speaker
+        const bySpk = {};
+        for (const r of rulings) {
+            const key = r.speaker || '';
+            if (!bySpk[key]) bySpk[key] = [];
+            bySpk[key].push(r);
+        }
+        html += `<div class="mw-qawl-malik">`;
+        for (const [speaker, items] of Object.entries(bySpk)) {
+            const via = items[0].via ? ` <span style="color:var(--cream-dim);font-size:.85rem;">(عن طريق ${escHtml(items[0].via)})</span>` : '';
+            html += `<div style="margin-bottom:.6rem;">
+                <strong style="color:var(--gold);">أقوال ${escHtml(speaker)}:${via}</strong>`;
+            for (const r of items) {
+                html += `<blockquote class="mw-quote">${fixArabicDisplay(escHtml(r.text || ''))}</blockquote>`;
+            }
+            html += `</div>`;
         }
         html += `</div>`;
     }
 
-    // أدلة
+    // أدلة — structured evidence list (حديث، أثر، قرآن، قول مالك، متن)
     if (dalilArr.length > 0) {
         html += `<div class="mw-dalil-section">
             <strong>الأدلة (${dalilArr.length}):</strong>
@@ -275,14 +305,32 @@ function renderMasalaCard(m, bab) {
             const typeLabel = d.type === 'hadith' ? 'حديث' : d.type === 'athar' ? 'أثر' : d.type || '';
             const hasFullText = d.full_text ? true : false;
             const clickAttr = hasFullText ? `class="mw-dalil-clickable" onclick="showDalilPopup(this)" data-full-text="${escAttr(d.full_text)}" data-shamela-url="${escAttr(d.shamela_url || '')}" data-type="${escAttr(typeLabel)}" data-num="${d.num || ''}"` : '';
+            const summary = d.summary || (d.full_text ? fixArabicDisplay(d.full_text.substring(0, 120)) + '...' : '');
             html += `<li ${clickAttr}>
                 <span class="mw-dalil-type">${escHtml(typeLabel)} ${d.num || ''}</span>
                 <span class="mw-dalil-narrator">${escHtml(d.narrator || '')}</span>
-                ${d.summary ? `<span class="mw-dalil-summary">— ${escHtml(d.summary)}</span>` : ''}
+                ${summary ? `<span class="mw-dalil-summary">— ${escHtml(summary)}</span>` : ''}
                 ${hasFullText ? '<span class="mw-dalil-expand">↩</span>' : ''}
             </li>`;
         }
         html += `</ul></div>`;
+    }
+
+    // Source text popup button (for non-الموطأ books)
+    const source = m._source;
+    if (source && source.full_text) {
+        const shaUrl = source.shamela_url || '';
+        html += `<div style="margin-top:.8rem;text-align:center;">
+            <button class="mw-source-btn" onclick="showSourcePopup(this)"
+                data-full-text="${escAttr(source.full_text)}"
+                data-shamela-url="${escAttr(shaUrl)}"
+                data-page-start="${source.page_start || ''}"
+                data-page-end="${source.page_end || ''}"
+                data-topic="${escAttr(topic)}"
+                style="background:var(--card-bg);border:1px solid var(--gold);color:var(--gold);padding:.4rem 1rem;border-radius:.3rem;cursor:pointer;font-family:inherit;font-size:.85rem;">
+                📖 عرض النص الكامل
+            </button>
+        </div>`;
     }
 
     // Old format fallback (dalil as string)
@@ -560,7 +608,7 @@ function buildMmNodes(kitab, W, H) {
                 x: cx + R2 * Math.cos(mAngle),
                 y: cy + R2 * Math.sin(mAngle),
                 r: 14,
-                label: m.masala_title || m.title || '',
+                label: m.masala_topic || m.masala_title || m.title || '',
                 masalaId: m.masala_id || m.id || '',
                 hukm: m.hukm || '',
             });
@@ -792,125 +840,99 @@ async function viewMasailHome() {
     setBreadcrumb([{ label: 'المسائل' }]);
     app.innerHTML = '<div class="loading">جاري التحميل...</div>';
 
-    // Load Muwatta data
-    const muwatta = await loadMuwatta();
-    let mwMasail = 0, mwAbwab = 0;
-    for (const k of muwatta.kutub) {
-        mwAbwab += k.abwab.length;
-        for (const b of k.abwab) mwMasail += b.masail.length;
-    }
+    // Load all books in parallel
+    const [muwatta, mudawwana, risala, khalil] = await Promise.all([
+        loadMuwatta(),
+        loadMudawwana().catch(() => null),
+        loadRisala().catch(() => null),
+        loadKhalil().catch(() => null),
+    ]);
 
-    // Load Phase 2 data
-    let phase2 = null;
-    try { phase2 = await loadPhase2(); } catch(e) {}
-    let p2Masail = 0;
-    if (phase2) {
-        for (const k of phase2.kutub) {
-            for (const b of k.abwab) p2Masail += b.masail.length;
+    function bookStats(data) {
+        if (!data) return { masail: 0, abwab: 0 };
+        let masail = 0, abwab = 0;
+        for (const k of data.kutub) {
+            abwab += k.abwab.length;
+            for (const b of k.abwab) masail += b.masail.length;
         }
+        return { masail, abwab };
     }
 
-    // Load comparison kutub
-    let kutub = [];
-    try { const r = await api('/api/kutub'); if (Array.isArray(r)) kutub = r; } catch(e) {}
-
-    let totalComparison = 0;
-    for (const k of kutub) totalComparison += k.masail_count;
+    const books = [
+        { data: muwatta,   hash: '#/muwatta',   color: 'var(--gold)', title: 'الموطأ — رواية يحيى الليثي' },
+        { data: mudawwana, hash: '#/mudawwana', color: '#4CAF50',     title: 'المدونة الكبرى' },
+        { data: risala,    hash: '#/risala',    color: '#2196F3',     title: 'الرسالة' },
+        { data: khalil,    hash: '#/khalil',    color: '#FF9800',     title: 'مختصر خليل' },
+    ];
 
     let html = `<h2 class="page-title">المسائل الفقهية</h2>
     <div class="cards-grid">`;
 
-    // Muwatta card — first
-    const remaining = muwatta.stats ? muwatta.stats.remaining_kutub : 0;
-    html += `
-    <div class="card mw-source-card" onclick="location.hash='#/muwatta'" style="border:2px solid var(--gold);">
-        <div class="card-title" style="color:var(--gold);">الموطأ — رواية يحيى الليثي</div>
-        <div style="color:var(--cream-dim);margin:.3rem 0;">${escHtml(muwatta.author)}</div>
-        <div class="card-stats">
-            <span class="stat-pill ittifaq">${muwatta.kutub.length} كتاب</span>
-            <span class="stat-pill tafsilat">${mwAbwab} باب</span>
-            <span class="stat-pill ikhtilaf">${mwMasail} مسألة</span>
-        </div>
-        ${remaining > 0 ? `<div style="color:var(--gold);font-size:.8rem;margin-top:.5rem;">${muwatta.kutub.length} من 62 كتاباً — جارٍ الاستخراج</div>` : ''}
-    </div>`;
-
-    // Phase 2 Unified Masail card — newly added
-    if (phase2) {
-        const avgTawafoq = phase2.stats.average_tawafoq || 0;
+    for (const b of books) {
+        if (!b.data) continue;
+        const s = bookStats(b.data);
         html += `
-    <div class="card mw-source-card" onclick="location.hash='#/phase2'" style="border:2px solid #4CAF50;">
-        <div class="card-title" style="color:#4CAF50;">المسائل الموحدة — Phase 2</div>
-        <div style="color:var(--cream-dim);margin:.3rem 0;">تحليل موحد من الموطأ والمدونة والرسالة ومختصر خليل</div>
+    <div class="card mw-source-card" onclick="location.hash='${b.hash}'" style="border:2px solid ${b.color};">
+        <div class="card-title" style="color:${b.color};">${escHtml(b.title)}</div>
+        <div style="color:var(--cream-dim);margin:.3rem 0;">${escHtml(b.data.author)}</div>
         <div class="card-stats">
-            <span class="stat-pill ittifaq">${phase2.kutub.length} موضوع</span>
-            <span class="stat-pill tafsilat">${p2Masail} مسألة</span>
-            <span class="stat-pill ikhtilaf">${avgTawafoq.toFixed(1)}% متوسط توافق</span>
+            <span class="stat-pill ittifaq">${b.data.kutub.length} كتاب</span>
+            <span class="stat-pill tafsilat">${s.abwab} باب</span>
+            <span class="stat-pill ikhtilaf">${s.masail} مسألة</span>
         </div>
-        <div style="color:#4CAF50;font-size:.8rem;margin-top:.5rem;">استخراج دلالي للإجماع والاختلاف والتفصيلات</div>
     </div>`;
     }
-
-    // Comparison kutub hidden for now
-    // TODO: re-enable when comparison data is ready
 
     html += '</div>';
     app.innerHTML = html;
 }
 
-// ===== Phase 2 Data (Unified Cross-Reference) =====
+// ===== Generic Book Views (المدونة، الرسالة، خليل) =====
 
-let _phase2Data = null;
-async function loadPhase2() {
-    if (!_phase2Data) {
-        const res = await fetch('tahara-phase2-unified.json');
-        if (!res.ok) throw new Error('فشل تحميل بيانات Phase 2');
-        const d = await res.json();
-        if (!d || !Array.isArray(d.kutub)) throw new Error('بيانات Phase 2 غير صالحة');
-        _phase2Data = d;
-    }
-    return _phase2Data;
-}
+const BOOK_ROUTES = {
+    mudawwana: { loader: loadMudawwana, title: 'المدونة الكبرى', color: '#4CAF50' },
+    risala:    { loader: loadRisala,    title: 'الرسالة',        color: '#2196F3' },
+    khalil:    { loader: loadKhalil,    title: 'مختصر خليل',     color: '#FF9800' },
+};
 
-// ===== Phase 2 Views =====
+async function viewGenericBook(bookKey) {
+    const cfg = BOOK_ROUTES[bookKey];
+    if (!cfg) { app.innerHTML = '<div class="empty-state">المصنف غير موجود</div>'; return; }
 
-async function viewPhase2() {
     setActiveNav('nav-masail');
     setBreadcrumb([
         { label: 'المسائل', href: '#/masail-home' },
-        { label: 'المسائل الموحدة' },
+        { label: cfg.title },
     ]);
     app.innerHTML = '<div class="loading">جاري التحميل...</div>';
 
-    const data = await loadPhase2();
+    const data = await cfg.loader();
     const kutub = data.kutub;
 
-    let totalMasail = 0;
+    let totalMasail = 0, totalAbwab = 0;
     for (const k of kutub) {
-        totalMasail += k.masail_count || 0;
+        totalAbwab += k.abwab.length;
+        for (const b of k.abwab) totalMasail += b.masail.length;
     }
 
-    const avgTawafoq = data.stats.average_tawafoq || 0;
-
     let html = `
-    <h2 class="page-title">المسائل الموحدة — كتاب الطهارة</h2>
-    <div style="text-align:center;color:var(--cream-dim);margin-bottom:1rem;">
-        ${escHtml(data.author)}
-    </div>
+    <h2 class="page-title">مسائل ${escHtml(cfg.title)}</h2>
+    <div style="text-align:center;color:var(--cream-dim);margin-bottom:1rem;">${escHtml(data.author)}</div>
     <div class="stats-bar" style="margin-bottom:1.5rem;">
-        <div class="stat-item"><span class="stat-num">${kutub.length}</span><span class="stat-lbl">موضوع</span></div>
-        <div class="stat-item"><span class="stat-num">${totalMasail}</span><span class="stat-lbl">مسألة موحدة</span></div>
-        <div class="stat-item"><span class="stat-num">${data.stats.books_covered}</span><span class="stat-lbl">كتاب</span></div>
-        <div class="stat-item"><span class="stat-num">${avgTawafoq.toFixed(1)}%</span><span class="stat-lbl">متوسط توافق</span></div>
+        <div class="stat-item"><span class="stat-num">${kutub.length}</span><span class="stat-lbl">كتاب</span></div>
+        <div class="stat-item"><span class="stat-num">${totalAbwab}</span><span class="stat-lbl">باب</span></div>
+        <div class="stat-item"><span class="stat-num">${totalMasail}</span><span class="stat-lbl">مسألة</span></div>
     </div>
     <div class="cards-grid">`;
 
     for (const k of kutub) {
         const mc = k.masail_count || k.abwab.reduce((s, b) => s + b.masail.length, 0);
         html += `
-        <div class="card" onclick="location.hash='#/phase2/kitab/${k.kitab_num}'">
+        <div class="card" onclick="location.hash='#/${bookKey}/kitab/${k.kitab_num}'">
             <div class="card-title">${escHtml(k.kitab_name)}</div>
             <div class="card-stats">
-                <span class="stat-pill ittifaq">${mc} موحد</span>
+                <span class="stat-pill tafsilat">${k.abwab.length} باب</span>
+                <span class="stat-pill ittifaq">${mc} مسألة</span>
             </div>
         </div>`;
     }
@@ -919,119 +941,211 @@ async function viewPhase2() {
     app.innerHTML = html;
 }
 
-async function viewPhase2Kitab(kitabNum) {
+async function viewGenericBookKitab(bookKey, kitabNum) {
+    const cfg = BOOK_ROUTES[bookKey];
+    if (!cfg) return;
+
     setActiveNav('nav-masail');
     app.innerHTML = '<div class="loading">جاري التحميل...</div>';
 
-    const data = await loadPhase2();
+    const data = await cfg.loader();
     const kitab = data.kutub.find(k => k.kitab_num == kitabNum);
-    if (!kitab) { app.innerHTML = '<div class="empty-state">الموضوع غير موجود</div>'; return; }
+    if (!kitab) { app.innerHTML = '<div class="empty-state">الكتاب غير موجود</div>'; return; }
 
     setBreadcrumb([
         { label: 'المسائل', href: '#/masail-home' },
-        { label: 'المسائل الموحدة', href: '#/phase2' },
+        { label: cfg.title, href: `#/${bookKey}` },
         { label: kitab.kitab_name },
     ]);
 
     const totalMasail = kitab.abwab.reduce((s, b) => s + b.masail.length, 0);
 
     let html = `<div class="page-enter">
-    <h2 class="page-title" style="margin-bottom:0.25rem;">${escHtml(kitab.kitab_name)}</h2>
-    <div style="color:var(--cream-dim);font-size:.9rem;margin-bottom:1.5rem;">${totalMasail} مسألة موحدة</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.2rem;">
+        <div>
+            <h2 class="page-title" style="margin-bottom:0.25rem;">${escHtml(kitab.kitab_name)}</h2>
+            <div style="color:var(--cream-dim);font-size:.9rem;">${totalMasail} مسألة — ${kitab.abwab.length} باب</div>
+        </div>
+    </div>
 
-    <div class="mw-list">`;
+    <div class="mw-search-wrap">
+        <span class="mw-search-icon">🔍</span>
+        <input class="mw-search-input" id="mwSearch" type="search" placeholder="ابحث في المسائل..." dir="rtl" oninput="mwFilterMasail(this.value)">
+    </div>
+
+    <div id="mwMasailContainer">`;
 
     for (const bab of kitab.abwab) {
-        for (const masala of bab.masail) {
-            const tawafoq = masala.tawafoq_percentage || 0;
-            const agreeType = masala.agreement_type || 'خلاف';
-            html += `
-            <div class="masala-row" onclick="location.hash='#/phase2/masala/${masala.masala_id}'" style="cursor:pointer;">
-                <div class="masala-title">${escHtml(masala.masala_title || masala.bab)}</div>
-                <div class="masala-meta">
-                    <span style="background:${tawafoq >= 90 ? '#4CAF50' : tawafoq >= 70 ? '#FF9800' : '#f44336'}; color:white; padding:0.25rem 0.75rem; border-radius:12px; font-size:0.8rem; font-weight:bold;">${tawafoq.toFixed(1)}%</span>
-                    <span style="color:var(--cream-dim);font-size:.85rem;">${agreeType}</span>
+        const babId = 'bab-' + (bab.bab_num || '').toString().replace(/\s+/g, '-');
+        html += `
+        <div class="mw-bab-group" id="${escHtml(babId)}">
+            <div class="mw-bab-group-header" onclick="toggleBabGroup('${escHtml(babId)}')">
+                <div>
+                    <span class="mw-bab-group-title">${escHtml(bab.bab_name || 'باب')}</span>
                 </div>
-            </div>`;
+                <div style="display:flex;align-items:center;gap:.6rem;">
+                    <span class="mw-bab-group-count">${bab.masail.length} مسألة</span>
+                    <span class="mw-bab-group-arrow">▼</span>
+                </div>
+            </div>
+            <div class="mw-bab-group-body">`;
+        for (const m of bab.masail) {
+            html += renderMasalaCard(m, bab);
         }
+        html += `</div></div>`;
+    }
+
+    html += `</div></div>`;
+    app.innerHTML = html;
+    applyMwReviewStates();
+}
+
+// ===== المقارنات (Comparison Views) =====
+
+async function viewComparisonHome() {
+    setActiveNav('nav-comparison');
+    setBreadcrumb([{ label: 'المقارنات' }]);
+    app.innerHTML = '<div class="loading">جاري التحميل...</div>';
+
+    const data = await loadComparison();
+
+    let html = `
+    <h2 class="page-title">المقارنات بين المصنفات</h2>
+    <div style="text-align:center;color:var(--cream-dim);margin-bottom:1rem;">
+        ${escHtml(data.description)}
+    </div>
+    <div class="stats-bar" style="margin-bottom:1.5rem;">
+        <div class="stat-item"><span class="stat-num">${data.total_comparisons}</span><span class="stat-lbl">مقارنة</span></div>
+        <div class="stat-item"><span class="stat-num">${data.average_tawafoq.toFixed(1)}%</span><span class="stat-lbl">متوسط توافق</span></div>
+        <div class="stat-item"><span class="stat-num">4</span><span class="stat-lbl">مصنف</span></div>
+    </div>
+    <div class="cards-grid">`;
+
+    for (const kitab of data.kutub) {
+        const abwabCount = kitab.abwab.length;
+        html += `
+        <div class="card" onclick="location.hash='#/comparison/${kitab.kitab_key}'" style="border:2px solid var(--gold);">
+            <div class="card-title" style="color:var(--gold);">${escHtml(kitab.kitab_name)}</div>
+            <div class="card-stats">
+                <span class="stat-pill ittifaq">${abwabCount} باب (موضوع)</span>
+            </div>
+        </div>`;
+    }
+
+    html += '</div>';
+    app.innerHTML = html;
+}
+
+async function viewComparisonKitab(kitabKey) {
+    setActiveNav('nav-comparison');
+    app.innerHTML = '<div class="loading">جاري التحميل...</div>';
+
+    const data = await loadComparison();
+    const kitab = data.kutub.find(k => k.kitab_key === kitabKey);
+    if (!kitab) { app.innerHTML = '<div class="empty-state">الكتاب غير موجود</div>'; return; }
+
+    setBreadcrumb([
+        { label: 'المقارنات', href: '#/comparison' },
+        { label: kitab.kitab_name },
+    ]);
+
+    let html = `<div class="page-enter">
+    <h2 class="page-title">${escHtml(kitab.kitab_name)} — المقارنات</h2>
+    <div style="color:var(--cream-dim);font-size:.9rem;margin-bottom:1.5rem;">${kitab.abwab.length} باب (موضوع)</div>
+
+    <div class="cards-grid">`;
+
+    for (const bab of kitab.abwab) {
+        const m = bab.masail[0];
+        if (!m) continue;
+        const tawafoq = m.tawafoq_percentage || 0;
+        const agreeType = m.agreement_type || 'خلاف';
+        const booksCount = (m.books_covered || []).length;
+
+        html += `
+        <div class="card" onclick="location.hash='#/comparison/${kitabKey}/bab/${bab.bab_num}'" style="cursor:pointer;">
+            <div class="card-title">${escHtml(bab.bab_name)}</div>
+            <div class="card-stats" style="margin-top:.5rem;">
+                <span style="background:${tawafoq >= 90 ? '#4CAF50' : tawafoq >= 70 ? '#FF9800' : '#f44336'}; color:white; padding:0.25rem 0.75rem; border-radius:12px; font-size:0.8rem; font-weight:bold;">${tawafoq.toFixed(1)}%</span>
+                <span class="stat-pill tafsilat">${agreeType}</span>
+                <span class="stat-pill ittifaq">${booksCount} مصنف</span>
+            </div>
+        </div>`;
     }
 
     html += '</div></div>';
     app.innerHTML = html;
 }
 
-async function viewPhase2Masala(masalaId) {
-    setActiveNav('nav-masail');
+async function viewComparisonBab(kitabKey, babNum) {
+    setActiveNav('nav-comparison');
     app.innerHTML = '<div class="loading">جاري التحميل...</div>';
 
-    const data = await loadPhase2();
+    const data = await loadComparison();
+    const kitab = data.kutub.find(k => k.kitab_key === kitabKey);
+    if (!kitab) { app.innerHTML = '<div class="empty-state">الكتاب غير موجود</div>'; return; }
 
-    let masala = null;
-    let kitab = null;
-    for (const k of data.kutub) {
-        for (const b of k.abwab) {
-            const m = b.masail.find(m => m.masala_id === masalaId);
-            if (m) {
-                masala = m;
-                kitab = k;
-                break;
-            }
-        }
-        if (masala) break;
-    }
-
-    if (!masala) {
-        app.innerHTML = '<div class="empty-state">المسألة غير موجودة</div>';
-        return;
-    }
-
-    const tawafoq = masala.tawafoq_percentage || 0;
-    const agreeType = masala.agreement_type || 'خلاف';
-    const khalif = masala.khalif_summary || '';
-    const tafsil = masala.tafsil_summary || '';
+    const bab = kitab.abwab.find(b => b.bab_num == babNum);
+    if (!bab) { app.innerHTML = '<div class="empty-state">الباب غير موجود</div>'; return; }
 
     setBreadcrumb([
-        { label: 'المسائل', href: '#/masail-home' },
-        { label: 'المسائل الموحدة', href: '#/phase2' },
-        { label: kitab.kitab_name, href: `#/phase2/kitab/${kitab.kitab_num}` },
-        { label: masala.masala_title || 'المسألة' },
+        { label: 'المقارنات', href: '#/comparison' },
+        { label: kitab.kitab_name, href: `#/comparison/${kitabKey}` },
+        { label: bab.bab_name },
     ]);
 
     let html = `<div class="page-enter">
-    <h2 class="page-title">${escHtml(masala.masala_title || masala.bab)}</h2>
+    <h2 class="page-title">${escHtml(bab.bab_name)}</h2>`;
 
-    <div style="background:${tawafoq >= 90 ? '#4CAF50' : tawafoq >= 70 ? '#FF9800' : '#f44336'}; color:white; padding:0.75rem 1rem; border-radius:8px; font-weight:bold; display:inline-block; margin-bottom:1.5rem;">
+    for (const m of bab.masail) {
+        const tawafoq = m.tawafoq_percentage || 0;
+        const agreeType = m.agreement_type || 'خلاف';
+        const books = (m.books_covered || []).join('، ');
+
+        html += `
+    <div style="background:${tawafoq >= 90 ? '#4CAF50' : tawafoq >= 70 ? '#FF9800' : '#f44336'}; color:white; padding:0.75rem 1rem; border-radius:8px; font-weight:bold; display:inline-block; margin-bottom:1rem;">
         ${agreeType} ${tawafoq.toFixed(1)}%
     </div>
+    <div style="color:var(--cream-dim);font-size:.85rem;margin-bottom:1rem;">المصنفات: ${escHtml(books)} — ${m.entries_count || 0} مدخل</div>
 
-    <section style="margin-top:1.5rem; padding:1rem; background:var(--dark-border); border-right:3px solid var(--gold);">
+    <section style="margin-top:1rem; padding:1rem; background:var(--dark-border); border-right:3px solid var(--gold);">
         <h3 style="color:var(--gold); margin-top:0;">ما اتفق عليه العلماء</h3>
-        <p style="line-height:1.8; color:var(--cream); margin-bottom:0.75rem;">
-            ${escHtml(masala.consensus_text || 'متفق عليه')}
-        </p>
-        <div style="color:var(--gold); font-size:0.9rem;">
-            <strong>الحكم الموحد:</strong> ${hukmBadge(masala.consensus_hukm)}
-        </div>
+        <p style="line-height:1.8; color:var(--cream); margin-bottom:0.75rem;">${escHtml(m.consensus_text || 'متفق عليه')}</p>
+        <div style="color:var(--gold); font-size:0.9rem;"><strong>الحكم الموحد:</strong> ${hukmBadge(m.consensus_hukm)}</div>
     </section>`;
 
-    if (khalif) {
-        html += `
-    <section style="margin-top:1.5rem; padding:1rem; background:var(--dark-border); border-right:3px solid #f44336;">
+        // Khalif
+        if (m.khalif && m.khalif.length > 0) {
+            let khalifHtml = '';
+            for (const k of m.khalif) {
+                const scholars = (k.scholars || []).filter(s => s).join('، ') || 'غير محدد';
+                khalifHtml += `<div style="margin:.5rem 0;"><strong>${hukmBadge(k.hukm)}</strong> — ${escHtml(scholars)} (${k.count || 0})</div>`;
+            }
+            html += `
+    <section style="margin-top:1rem; padding:1rem; background:var(--dark-border); border-right:3px solid #f44336;">
         <h3 style="color:#f44336; margin-top:0;">نقاط الخلاف</h3>
-        <p style="color:var(--cream); font-size:0.9rem; line-height:1.6;">${escHtml(khalif)}</p>
+        ${khalifHtml}
     </section>`;
-    }
+        }
 
-    if (tafsil) {
-        html += `
-    <section style="margin-top:1.5rem; padding:1rem; background:var(--dark-border); border-right:3px solid #FF9800;">
+        // Tafsil
+        if (m.tafsil && m.tafsil.length > 0) {
+            let tafsilHtml = '';
+            for (const t of m.tafsil) {
+                const speaker = t.speaker || 'عالم';
+                const conds = (t.conditions || []).join('، ');
+                tafsilHtml += `<div style="margin:.5rem 0;"><strong>${escHtml(speaker)}</strong> (${escHtml(t.book || '')}): ${escHtml(conds)}</div>`;
+            }
+            html += `
+    <section style="margin-top:1rem; padding:1rem; background:var(--dark-border); border-right:3px solid #FF9800;">
         <h3 style="color:#FF9800; margin-top:0;">التفصيلات والشروط</h3>
-        <p style="color:var(--cream); font-size:0.9rem; line-height:1.6;">${escHtml(tafsil)}</p>
+        ${tafsilHtml}
     </section>`;
-    }
+        }
 
-    html += `
-    <section style="margin-top:1.5rem;">
+        // Scholar positions table
+        html += `
+    <section style="margin-top:1rem;">
         <h3 style="color:var(--gold);">مواقف العلماء</h3>
         <div style="overflow-x:auto;">
         <table style="width:100%; border-collapse:collapse; font-size:0.9rem; color:var(--cream);">
@@ -1045,58 +1159,31 @@ async function viewPhase2Masala(masalaId) {
         </thead>
         <tbody>`;
 
-    for (const pos of masala.dalil || []) {
-        const hukmText = pos.summary || pos.hukm || 'جائز';
-        const shamUrl = pos.shamela_url || '';
-        const isLink = shamUrl && shamUrl.startsWith('http');
-        html += `
+        for (const pos of m.positions || []) {
+            const shamUrl = pos.shamela_link || '';
+            const isLink = shamUrl && shamUrl.startsWith('http');
+            html += `
             <tr style="border-bottom:1px solid var(--dark-border);">
                 <td style="padding:0.75rem; color:var(--cream-dim);">${escHtml(pos.book || '')}</td>
                 <td style="padding:0.75rem;">${escHtml(pos.speaker || '')}</td>
-                <td style="padding:0.75rem;">${hukmBadge(hukmText)}</td>
+                <td style="padding:0.75rem;">${hukmBadge(pos.hukm)}</td>
                 <td style="padding:0.75rem;">
-                    ${isLink ? `<a href="${escAttr(shamUrl)}" target="_blank" style="color:var(--gold); text-decoration:none;">Shamela ↗</a>` : '<span style="color:var(--cream-dim);">—</span>'}
+                    ${isLink ? `<a href="${escAttr(shamUrl)}" target="_blank" style="color:var(--gold); text-decoration:none;">الشاملة ↗</a>` : '<span style="color:var(--cream-dim);">—</span>'}
                 </td>
             </tr>`;
+        }
+
+        html += `</tbody></table></div></section>`;
     }
 
-    html += `
-        </tbody>
-        </table>
-        </div>
-    </section>
-    </div>`;
-
+    html += '</div>';
     app.innerHTML = html;
 }
 
 // ===== Views =====
 
 async function viewDashboard() {
-    setActiveNav('nav-masail');
-    setBreadcrumb(null);
-    let kutub = [];
-    try { const r = await api('/api/kutub'); if (Array.isArray(r)) kutub = r; } catch(e) {}
-
-    let html = '<h2 class="page-title">الكتب الفقهية</h2>';
-    html += '<div class="cards-grid">';
-
-    for (const k of kutub) {
-        html += `
-        <div class="card" onclick="location.hash='#/kitab/${k.kitab_key}'">
-            <div class="card-title">${k.kitab}</div>
-            <div style="color:var(--cream-dim);margin-bottom:0.5rem;">
-                ${k.masail_count} مسألة &mdash; ${k.abwab_count} باب
-            </div>
-            <div class="card-stats">
-                <span class="stat-pill ittifaq">اتفاق: ${k.ittifaq}</span>
-                <span class="stat-pill ikhtilaf">اختلاف: ${k.ikhtilaf}</span>
-                <span class="stat-pill tafsilat">تفصيل: ${k.tafsilat}</span>
-            </div>
-        </div>`;
-    }
-    html += '</div>';
-    app.innerHTML = html;
+    await viewMasailHome();
 }
 
 async function viewKitab(kitabKey) {
@@ -1739,8 +1826,29 @@ async function route() {
         } else if (hash.match(/^#\/muwatta\/kitab\/(\d+)$/)) {
             const m = hash.match(/^#\/muwatta\/kitab\/(\d+)$/);
             await viewMuwattaKitab(parseInt(m[1]));
+        } else if (hash === '#/mudawwana') {
+            await viewGenericBook('mudawwana');
+        } else if (hash.match(/^#\/mudawwana\/kitab\/(\d+)$/)) {
+            const m = hash.match(/^#\/mudawwana\/kitab\/(\d+)$/);
+            await viewGenericBookKitab('mudawwana', parseInt(m[1]));
+        } else if (hash === '#/risala') {
+            await viewGenericBook('risala');
+        } else if (hash.match(/^#\/risala\/kitab\/(\d+)$/)) {
+            const m = hash.match(/^#\/risala\/kitab\/(\d+)$/);
+            await viewGenericBookKitab('risala', parseInt(m[1]));
+        } else if (hash === '#/khalil') {
+            await viewGenericBook('khalil');
+        } else if (hash.match(/^#\/khalil\/kitab\/(\d+)$/)) {
+            const m = hash.match(/^#\/khalil\/kitab\/(\d+)$/);
+            await viewGenericBookKitab('khalil', parseInt(m[1]));
         } else if (hash === '#/comparison') {
-            await viewDashboard();
+            await viewComparisonHome();
+        } else if (hash.match(/^#\/comparison\/([^/]+)\/bab\/(\d+)$/)) {
+            const m = hash.match(/^#\/comparison\/([^/]+)\/bab\/(\d+)$/);
+            await viewComparisonBab(m[1], parseInt(m[2]));
+        } else if (hash.match(/^#\/comparison\/([^/]+)$/)) {
+            const m = hash.match(/^#\/comparison\/([^/]+)$/);
+            await viewComparisonKitab(m[1]);
         } else if (hash === '#/maraji3') {
             await viewMaraji3();
         } else if (hash === '#/feedback') {
@@ -1764,14 +1872,6 @@ async function route() {
         } else if (hash.match(/^#\/masala\/(.+)$/)) {
             const m = hash.match(/^#\/masala\/(.+)$/);
             await viewMasala(m[1]);
-        } else if (hash === '#/phase2') {
-            await viewPhase2();
-        } else if (hash.match(/^#\/phase2\/kitab\/(\d+)$/)) {
-            const m = hash.match(/^#\/phase2\/kitab\/(\d+)$/);
-            await viewPhase2Kitab(parseInt(m[1]));
-        } else if (hash.match(/^#\/phase2\/masala\/(.+)$/)) {
-            const m = hash.match(/^#\/phase2\/masala\/(.+)$/);
-            await viewPhase2Masala(m[1]);
         } else {
             await viewDashboard();
         }
@@ -2076,6 +2176,32 @@ window.addEventListener('DOMContentLoaded', () => {
     document.body.appendChild(modal);
 });
 
+function fixArabicDisplay(text) {
+    // Fix ﵎ (Unicode ligature for تبارك وتعالى) display
+    return (text || '').replace(/﵎/g, 'تبارك وتعالى').replace(/﵇/g, 'صلى الله عليه وسلم');
+}
+
+function showSourcePopup(el) {
+    const fullText = el.dataset.fullText || '';
+    const shamelaUrl = el.dataset.shamelaUrl || '';
+    const pageStart = el.dataset.pageStart || '';
+    const pageEnd = el.dataset.pageEnd || '';
+    const topic = el.dataset.topic || '';
+
+    const pageInfo = pageStart === pageEnd ? `ص ${pageStart}` : `ص ${pageStart} — ${pageEnd}`;
+    document.getElementById('dalilModalTitle').textContent = `${topic} (${pageInfo})`;
+    document.getElementById('dalilModalBody').textContent = fixArabicDisplay(fullText);
+
+    const footer = document.getElementById('dalilModalFooter');
+    if (shamelaUrl) {
+        footer.innerHTML = `<a href="${escAttr(shamelaUrl)}" target="_blank" rel="noopener" class="dalil-shamela-link">📖 عرض في المكتبة الشاملة</a>`;
+    } else {
+        footer.innerHTML = '';
+    }
+
+    document.getElementById('dalilModal').classList.add('active');
+}
+
 function showDalilPopup(el) {
     const fullText = el.dataset.fullText || '';
     const shamelaUrl = el.dataset.shamelaUrl || '';
@@ -2083,7 +2209,7 @@ function showDalilPopup(el) {
     const num = el.dataset.num || '';
 
     document.getElementById('dalilModalTitle').textContent = `${type} ${num}`;
-    document.getElementById('dalilModalBody').textContent = fullText;
+    document.getElementById('dalilModalBody').textContent = fixArabicDisplay(fullText);
 
     const footer = document.getElementById('dalilModalFooter');
     if (shamelaUrl) {
