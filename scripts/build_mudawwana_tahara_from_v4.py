@@ -28,8 +28,13 @@ full_text = ''
 page_map = []  # (char_start, char_end, page_id)
 for p in raw_pages:
     body = p['body']
-    # Strip header brackets [كتاب الوضوء] etc.
-    body = re.sub(r'\[.*?\]\s*', '', body, count=3)
+    # Strip ONLY the header brackets at the start of text (e.g. [كتاب الوضوء])
+    # Preserve surah references like [المائدة: ٦] and section headers within text
+    body = re.sub(r'^\s*\[كِتَابُ[^\]]*\]\s*', '', body)
+    body = re.sub(r'^\s*\[مَا جَاءَ[^\]]*\]\s*', '', body)
+    body = re.sub(r'^\s*\[جَامِعُ[^\]]*\]\s*', '', body)
+    body = re.sub(r'^\s*\[اغْتِسَال[^\]]*\]\s*', '', body)
+    body = re.sub(r'^\s*\[مُجَاوَزَة[^\]]*\]\s*', '', body)
     start = len(full_text)
     full_text += body + '\n'
     page_map.append((start, len(full_text), p['page_id']))
@@ -69,16 +74,37 @@ def extract_dalil_from_text(text, base_page):
     dalil = []
     plain = strip_d(text)
 
-    # Quran verses
+    # Quran verses — find ﴿...﴾ then locate proper start (قال الله etc.)
     for m in re.finditer(r'﴿([^﴾]+)﴾', text):
-        # Get surrounding context (up to 100 chars before)
-        start = max(0, m.start() - 100)
-        context = text[start:m.end() + 50].strip()
+        # Look backwards for verse introduction
+        before = text[max(0, m.start() - 120):m.start()]
+        # Find the latest introduction marker before the verse
+        best_start = m.start()  # default: start at ﴿
+        for intro in ['قَالَ اللَّهُ', 'قال الله', 'قَوْلِ اللَّهِ', 'قوله تعالى',
+                       'قَوْلَ اللَّهِ', 'لِقَوْلِ اللَّهِ', 'تَلَا', 'الْآيَةِ:',
+                       'الْآيَةَ:', 'هَذِهِ الْآيَةِ:']:
+            idx = before.rfind(intro)
+            if idx >= 0:
+                best_start = max(0, m.start() - 120) + idx
+                break
+
+        # Look forward for surah reference [المائدة: ٦] after ﴾
+        after = text[m.end():min(len(text), m.end() + 60)]
+        end = m.end()
+        # Match [SurahName: N] pattern
+        ref_match = re.search(r'\[.*?\]', after)
+        if ref_match:
+            end = m.end() + ref_match.end()
+        else:
+            # Just include a few chars after ﴾ for context
+            end = min(len(text), m.end() + 5)
+
+        verse_text = text[best_start:end].strip()
         dalil.append({
             'type': 'قرآن',
-            'full_text': context,
-            'page_id': find_page(start),
-            'shamela_url': shamela_url(find_page(start)),
+            'full_text': verse_text,
+            'page_id': find_page(best_start),
+            'shamela_url': shamela_url(find_page(best_start)),
         })
 
     # Hadiths (رسول الله ﷺ said/did)
@@ -248,7 +274,8 @@ for i, mdef in enumerate(MASAIL_DEF):
     for p in raw_pages:
         if p_min <= p['page_id'] <= p_max:
             body = p['body']
-            body = re.sub(r'\[.*?\]\s*', '', body, count=3)
+            body = re.sub(r'^\s*\[كِتَابُ[^\]]*\]\s*', '', body)
+            body = re.sub(r'^\s*\[مَا جَاءَ[^\]]*\]\s*', '', body)
             masala_text += body + '\n'
             if first_page is None:
                 first_page = p['page_id']

@@ -75,11 +75,25 @@ masail_out = []
 def extract_dalil_from_risala(text, page_start):
     """Extract hadiths and Quran references embedded in الرسالة text."""
     dalil = []
-    # Quran verses
+    # Quran verses — find ﴿...﴾ then locate proper start
     for m in re.finditer(r'﴿([^﴾]+)﴾', text):
-        start = max(0, m.start() - 80)
-        context = text[start:m.end() + 30].strip()
-        dalil.append({'type': 'قرآن', 'full_text': context, 'page_id': page_start, 'shamela_url': shamela_url(page_start)})
+        before = text[max(0, m.start() - 120):m.start()]
+        best_start = m.start()
+        for intro in ['قَالَ اللَّهُ', 'قال الله', 'قَوْلِ اللَّهِ', 'قوله تعالى',
+                       'لِقَوْلِ اللَّهِ', 'تَلَا', 'الْآيَةِ:']:
+            idx = before.rfind(intro)
+            if idx >= 0:
+                best_start = max(0, m.start() - 120) + idx
+                break
+        after = text[m.end():min(len(text), m.end() + 60)]
+        end = m.end()
+        ref_match = re.search(r'\[.*?\]', after)
+        if ref_match:
+            end = m.end() + ref_match.end()
+        else:
+            end = min(len(text), m.end() + 5)
+        verse_text = text[best_start:end].strip()
+        dalil.append({'type': 'قرآن', 'full_text': verse_text, 'page_id': page_start, 'shamela_url': shamela_url(page_start)})
 
     # Hadith references (رسول الله ﷺ or النبي ﷺ)
     for m in re.finditer(r'(?:رسول الله ﷺ|النبي ﷺ|النبي ﵇)', text):
